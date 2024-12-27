@@ -10,21 +10,30 @@ st.title("Ghana Stock Exchange Dashboard")
 def fetch_stock_data():
     url = "https://dev.kwayisi.org/apis/gse/live"  # API endpoint
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)  # Set a timeout to prevent hanging
+        response.raise_for_status()  # Raise an error for bad HTTP responses
         data = response.json()
+       
+        if not data:
+            st.error("No data returned from the API.")
+            return pd.DataFrame()
+       
         # Convert data to a DataFrame
         df = pd.DataFrame(data)
         # Rename columns for better readability
         df = df.rename(columns={"name": "Symbol", "price": "Price", "volume": "Volume", "change": "Change"})
         return df
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         st.error(f"Error fetching data: {e}")
         return pd.DataFrame()
 
 # Load stock data
 stock_data = fetch_stock_data()
 
-if not stock_data.empty:
+# Check if stock data is empty
+if stock_data.empty:
+    st.write("No stock data available at the moment. Please try again later.")
+else:
     # Populate dropdown with all available companies
     st.sidebar.header("Filter Options")
     selected_company = st.sidebar.selectbox("Choose a Company", stock_data["Symbol"].unique())
@@ -54,8 +63,6 @@ if not stock_data.empty:
     # Display Full Stock Data Table
     st.header("All Stock Data")
     st.dataframe(stock_data)
-else:
-    st.write("No data available. Please check your internet connection or try again later.")
 
 # Real-time Update Button
 if st.button("Refresh Data"):
