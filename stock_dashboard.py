@@ -1,59 +1,62 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import requests
 
-# Sample dataset (Simulated GSE data)
-data = {
-    "Stock": ["MTNGH", "GCB", "UNIL", "ETI", "TOTAL"],
-    "Price": [2.45, 6.35, 17.99, 0.31, 13.12],
-    "Change (%)": [1.5, -0.8, 2.3, 0.5, -0.3],
-    "Volume": [100000, 50000, 20000, 150000, 80000],
-    "Sector": ["Telecom", "Banking", "Consumer Goods", "Banking", "Energy"],
-}
+# Title of the Dashboard
+st.title("Ghana Stock Exchange Dashboard")
 
-# Convert to DataFrame
-stocks_df = pd.DataFrame(data)
+# Function to fetch all companies and stock data from GSE-API
+def fetch_stock_data():
+    url = "https://dev.kwayisi.org/apis/gse/live"  # API endpoint
+    try:
+        response = requests.get(url)
+        data = response.json()
+        # Convert data to a DataFrame
+        df = pd.DataFrame(data)
+        # Rename columns for better readability
+        df = df.rename(columns={"name": "Symbol", "price": "Price", "volume": "Volume", "change": "Change"})
+        return df
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return pd.DataFrame()
 
-# Add simple moving average and recommendations
-stocks_df["SMA_5"] = stocks_df["Price"] * (1 + pd.Series([0.01, -0.02, 0.03, 0.00, -0.01]))
-stocks_df["Recommendation"] = pd.Series(
-    ["Buy" if change > 1 else "Sell" if change < -0.5 else "Hold" for change in stocks_df["Change (%)"]]
-)
+# Load stock data
+stock_data = fetch_stock_data()
 
-# Streamlit App Title
-st.title("Ghana Stock Market Dashboard")
+if not stock_data.empty:
+    # Populate dropdown with all available companies
+    st.sidebar.header("Filter Options")
+    selected_company = st.sidebar.selectbox("Choose a Company", stock_data["Symbol"].unique())
+   
+    # Filter data for the selected company
+    company_data = stock_data[stock_data["Symbol"] == selected_company]
 
-# Display Data Table
-st.header("Stock Data")
-st.dataframe(stocks_df)
+    # Display Metrics for the Selected Company
+    st.header(f"Performance of {selected_company}")
+    if not company_data.empty:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Price (GHS)", company_data.iloc[0]["Price"])
+        col2.metric("Volume", int(company_data.iloc[0]["Volume"]))
+        col3.metric("Change (%)", company_data.iloc[0]["Change"])
+    else:
+        st.write("No data available for the selected company.")
 
-# Interactive Filter
-st.sidebar.header("Filters")
-sector_filter = st.sidebar.multiselect("Select Sectors:", stocks_df["Sector"].unique(), stocks_df["Sector"].unique())
+    # Plotting Price Trend for All Companies
+    st.header("Price Trend")
+    fig, ax = plt.subplots()
+    ax.plot(stock_data["Symbol"], stock_data["Price"], marker="o", linestyle="-")
+    ax.set_xlabel("Company")
+    ax.set_ylabel("Price (GHS)")
+    ax.set_title("Stock Prices of Companies on Ghana Stock Exchange")
+    st.pyplot(fig)
 
-# Filter data
-filtered_df = stocks_df[stocks_df["Sector"].isin(sector_filter)]
+    # Display Full Stock Data Table
+    st.header("All Stock Data")
+    st.dataframe(stock_data)
+else:
+    st.write("No data available. Please check your internet connection or try again later.")
 
-# Visualization: Bar Chart of Prices
-st.subheader("Stock Prices")
-fig, ax = plt.subplots()
-ax.bar(filtered_df["Stock"], filtered_df["Price"], color="skyblue", edgecolor="black")
-ax.set_ylabel("Price (GHS)")
-ax.set_title("Stock Prices by Company")
-st.pyplot(fig)
-
-# Recommendations Visualization
-st.subheader("Recommendations")
-colors = {"Buy": "green", "Hold": "blue", "Sell": "red"}
-recommendation_colors = [colors[rec] for rec in filtered_df["Recommendation"]]
-fig, ax = plt.subplots()
-ax.scatter(filtered_df["Stock"], filtered_df["Price"], color=recommendation_colors, s=100, edgecolor="black")
-ax.set_ylabel("Price (GHS)")
-ax.set_title("Stock Recommendations")
-st.pyplot(fig)
-
-# Add Insights
-st.sidebar.subheader("Insights")
-st.sidebar.write(f"Number of Stocks: {len(filtered_df)}")
-st.sidebar.write(f"Average Price: {filtered_df['Price'].mean():.2f} GHS")
-st.sidebar.write(f"Recommendations: {filtered_df['Recommendation'].value_counts().to_dict()}")
+# Real-time Update Button
+if st.button("Refresh Data"):
+    st.experimental_rerun()
