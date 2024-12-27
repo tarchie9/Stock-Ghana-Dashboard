@@ -1,85 +1,59 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import requests
 
-# Title of the Dashboard
-st.title("Ghana Stock Exchange Dashboard")
+# Sample dataset (Simulated GSE data)
+data = {
+    "Stock": ["MTNGH", "GCB", "UNIL", "ETI", "TOTAL"],
+    "Price": [2.45, 6.35, 17.99, 0.31, 13.12],
+    "Change (%)": [1.5, -0.8, 2.3, 0.5, -0.3],
+    "Volume": [100000, 50000, 20000, 150000, 80000],
+    "Sector": ["Telecom", "Banking", "Consumer Goods", "Banking", "Energy"],
+}
 
-# Sidebar for Filters
-st.sidebar.header("Filter Options")
-selected_company = st.sidebar.selectbox(
-    "Choose a Company",
-    [
-        "GCB Bank Limited",
-        "AngloGold Ashanti",
-        "CalBank Limited",
-        "Ecobank Ghana",
-        "Fan Milk Limited",
-        "Guinness Ghana",
-        "MTN Ghana",
-        "Total Petroleum Ghana",
-        "Unilever Ghana",
-    ]
+# Convert to DataFrame
+stocks_df = pd.DataFrame(data)
+
+# Add simple moving average and recommendations
+stocks_df["SMA_5"] = stocks_df["Price"] * (1 + pd.Series([0.01, -0.02, 0.03, 0.00, -0.01]))
+stocks_df["Recommendation"] = pd.Series(
+    ["Buy" if change > 1 else "Sell" if change < -0.5 else "Hold" for change in stocks_df["Change (%)"]]
 )
 
-# Function to fetch stock data from Ghana Stock Exchange
-def fetch_stock_data():
-    # Replace this URL with an actual API or data source if available
-    url = "https://example.com/api/ghana-stock-exchange"
-    try:
-        response = requests.get(url)
-        data = response.json()
-        return pd.DataFrame(data)
-    except:
-        # Sample data for demonstration purposes
-        sample_data = {
-            "Company": [
-                "GCB Bank Limited",
-                "AngloGold Ashanti",
-                "CalBank Limited",
-                "Ecobank Ghana",
-                "Fan Milk Limited",
-                "Guinness Ghana",
-                "MTN Ghana",
-                "Total Petroleum Ghana",
-                "Unilever Ghana",
-            ],
-            "Price": [15.3, 100.5, 3.7, 9.2, 2.5, 6.8, 1.2, 3.6, 4.7],
-            "Volume": [1000, 500, 700, 300, 800, 1200, 1500, 900, 600],
-            "Change": [0.5, -1.0, 0.2, -0.3, 0.1, 0.0, -0.1, 0.2, -0.2],
-        }
-        return pd.DataFrame(sample_data)
+# Streamlit App Title
+st.title("Ghana Stock Market Dashboard")
 
-# Load the data
-stock_data = fetch_stock_data()
+# Display Data Table
+st.header("Stock Data")
+st.dataframe(stocks_df)
 
-# Filter data for the selected company
-company_data = stock_data[stock_data["Company"] == selected_company]
+# Interactive Filter
+st.sidebar.header("Filters")
+sector_filter = st.sidebar.multiselect("Select Sectors:", stocks_df["Sector"].unique(), stocks_df["Sector"].unique())
 
-# Display Metrics
-st.header(f"Performance of {selected_company}")
-if not company_data.empty:
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Price (GHS)", company_data.iloc[0]["Price"])
-    col2.metric("Volume", int(company_data.iloc[0]["Volume"]))
-    col3.metric("Change (%)", company_data.iloc[0]["Change"])
-else:
-    st.write("No data available for the selected company.")
+# Filter data
+filtered_df = stocks_df[stocks_df["Sector"].isin(sector_filter)]
 
-# Plotting Price Trend
-st.header("Price Trend")
+# Visualization: Bar Chart of Prices
+st.subheader("Stock Prices")
 fig, ax = plt.subplots()
-ax.plot(stock_data["Company"], stock_data["Price"], marker="o", linestyle="-")
-ax.set_xlabel("Company")
+ax.bar(filtered_df["Stock"], filtered_df["Price"], color="skyblue", edgecolor="black")
 ax.set_ylabel("Price (GHS)")
-ax.set_title("Stock Prices of Companies on Ghana Stock Exchange")
+ax.set_title("Stock Prices by Company")
 st.pyplot(fig)
 
-# Table of Stock Data
-st.header("All Stock Data")
-st.dataframe(stock_data)
+# Recommendations Visualization
+st.subheader("Recommendations")
+colors = {"Buy": "green", "Hold": "blue", "Sell": "red"}
+recommendation_colors = [colors[rec] for rec in filtered_df["Recommendation"]]
+fig, ax = plt.subplots()
+ax.scatter(filtered_df["Stock"], filtered_df["Price"], color=recommendation_colors, s=100, edgecolor="black")
+ax.set_ylabel("Price (GHS)")
+ax.set_title("Stock Recommendations")
+st.pyplot(fig)
 
-# Real-time Update Button
-if st.button("Refresh Data"):
-    st.experimental_rerun()
+# Add Insights
+st.sidebar.subheader("Insights")
+st.sidebar.write(f"Number of Stocks: {len(filtered_df)}")
+st.sidebar.write(f"Average Price: {filtered_df['Price'].mean():.2f} GHS")
+st.sidebar.write(f"Recommendations: {filtered_df['Recommendation'].value_counts().to_dict()}")
